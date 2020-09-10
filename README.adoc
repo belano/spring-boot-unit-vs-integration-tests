@@ -1,0 +1,65 @@
+= Spring Boot Unit vs Integration Tests
+
+Sample playground for exploring different testing strategies in a Spring Boot application, distinguishing between unit and integration tests.
+
+== Separating executions of Unit Tests and Integration Tests
+
+It has been considered that Junits and SpringBootTests/Cucumber tests are two different kind of tests and that they deserve to be separated.
+A couple of reasons for doing this could be that the integration tests are time-consuming and might need an actual database to execute.
+
+For this purpose, https://junit.org/junit5/docs/current/user-guide/#writing-tests-tagging-and-filtering[JUnit 5 tagging feature] has been used which allows us to specify that some tests are integration tests.
+
+Being able to distinguish unit tests and integration tests, we will use surefire to bind them to different Maven lifecycle phases: unit tests to the test phase, and the integration tests to the integration-test phase.
+
+.pom.xml
+[source,xml]
+----
+<plugin>
+   <artifactId>maven-surefire-plugin</artifactId>
+   <version>2.22.2</version>
+   <configuration>
+      <excludedGroups>integration</excludedGroups>
+   </configuration>
+   <executions>
+      <execution>
+         <id>integration-tests</id>
+         <phase>integration-test</phase>
+         <goals>
+            <goal>test</goal>
+         </goals>
+         <configuration>
+            <excludedGroups>!integration</excludedGroups>
+            <groups>integration</groups>
+         </configuration>
+      </execution>
+   </executions>
+</plugin>
+----
+
+This way, the SpringBootTests/Cucumber instances tagged as `integration` will be executed as part of the integration-test build phase while the other JUnit tests will still be ran during the test phase.
+You can run all the tests with the command `./mvnw clean verify` (and you will notice that two tests are ran in different phases).
+
+== Spring Boot controller testing strategies
+
+There are different ways to test controller (Web or API Layer) classes in Spring Boot, some provide support to write pure unit tests, and some others are more useful for integration tests.
+
+=== Unit Tests
+
+These are tests that don't need a web server which make them closer to the definition of a unit test.
+The approach is to not start the server at all but to test only the layer below, where Spring handles the incoming HTTP request and hands it off to your controller.
+That way, almost of the full stack is used, and your code will be called in exactly the same way as if it were processing a real HTTP request but without the cost of starting the server.
+To do that, use Spring's `MockMvc` and ask for that to be injected for you by using the `@AutoConfigureMockMvc` annotation on the test case.
+
+* *MockMvc standalone* - Spring context won't get loaded, and we need to explicitly configure our controller under test, the controller advice and our HTTP filter.
+* *MockMvc and WebMvcTest* - With the `@WebMvcTest` annotation Spring will load only a partial context (the controller and its surrounding configuration like filters and advices).
+
+=== Integration Tests
+
+These tests focus on integrating different layers of the application.
+
+* *HTTP request test* - when using `@SpringBootTest` with `WebEnvironment.RANDOM_PORT` or `WebEnvironment.DEFINED_PORT)`, we have a full application context and web server up and running for our tests.
+
+* *Cucumber tests* - same as above
+
+NOTE: Since Cucumber tags are mapped to JUnit tags, Cucumber scenarios need to be tagged with the `@integration` tag in order to be run during the integration-test maven lifecycle phase.
+
